@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Suspense, lazy } from "react";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import axios from 'axios';
 import AppLayout from "./components/AppLayout.jsx";
 import { AuthProvider } from "./components/AuthContext.jsx";
 import Error from "./components/Error.jsx";
@@ -10,6 +11,45 @@ import Loader from "./components/Loader.jsx";
 import RequireAuth from "./components/PrivateRoute.jsx";
 import Login from "./pages/login/Login.jsx";
 import Register from "./pages/register/Register.jsx";
+
+// Configure axios defaults
+const configureAxios = () => {
+  // Set API URL based on environment
+  const apiUrl = import.meta.env.PROD 
+    ? import.meta.env.VITE_API_URL || 'https://your-backend-app.onrender.com'
+    : import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  
+  axios.defaults.baseURL = apiUrl;
+  axios.defaults.withCredentials = true;
+  
+  // Optional: Add request interceptor for auth tokens
+  axios.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
+  // Optional: Add response interceptor for error handling
+  axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        // You might want to redirect to login here
+        // window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+  );
+};
+
+// Configure axios when the module loads
+configureAxios();
 
 const Feed = lazy(() => import("./pages/feed/Feed.jsx"));
 const Profile = lazy(() => import("./pages/profile/Profile.jsx"));
@@ -89,7 +129,7 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
       <AuthProvider>
         <Suspense fallback={<Loader />}>
           <RouterProvider router={router} fallbackElement={<Loader />} />
