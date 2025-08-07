@@ -15,10 +15,8 @@ import Register from "./pages/register/Register.jsx";
 // Configure axios defaults
 const configureAxios = () => {
   // Set API URL based on environment
-  const apiUrl = import.meta.env.PROD 
-    ? import.meta.env.VITE_API_URL || 'https://your-backend-app.onrender.com'
-    : import.meta.env.VITE_API_URL || 'http://localhost:3000';
-  
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  console.log('🔧 API URL configured:', apiUrl); 
   axios.defaults.baseURL = apiUrl;
   axios.defaults.withCredentials = true;
   
@@ -127,6 +125,12 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
+  useEffect(() => {
+    console.log('🔧 Environment check:');
+    console.log('- VITE_API_URL:', import.meta.env.VITE_API_URL);
+    console.log('- PROD mode:', import.meta.env.PROD);
+    console.log('- Axios baseURL:', axios.defaults.baseURL);
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
