@@ -26,11 +26,22 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
   const [imageUrl, setImageUrl] = useState("");
   const [thread, setThread] = useState(isEdit ? { id: threadInfo.thread_id, name: threadInfo.thread_name } : false);
   const { user } = AuthConsumer();
+
   const { mutate: handleSubmit, status } = useMutation({
     mutationFn: async (e) => {
       e?.preventDefault();
+
+      if (!thread || !thread.id) {
+        alert("Please select a thread first");
+        return;
+      }
+      if (!title.trim()) {
+        alert("Title is required");
+        return;
+      }
+
       const formData = new FormData();
-      formData.append("title", title);
+      formData.append("title", title.trim());
       formData.append("content_type", mediaType);
       formData.append("content_url", imageUrl);
       formData.append("content", content);
@@ -38,24 +49,24 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
         formData.append("media", media, media.name);
       }
       formData.append("subthread_id", thread.id);
-      if (!isEdit) {
-        await axios
-          .post("/api/post", formData, { headers: { "Content-Type": "multipart/form-data" } })
-          .then(() => setShowModal(false))
-          .catch((err) => alert(`${err.message} check your fields, Title is mandatory`));
-      } else {
-        await axios
-          .patch(`/api/post/${postInfo.id}`, formData, { headers: { "Content-Type": "multipart/form-data" } })
-          .then((res) => {
-            queryClient.setQueryData(["post/comment", `${postInfo.id}`], (oldData) => {
-              return { ...oldData, post_info: res.data.new_data };
-            });
-            setShowModal(false);
-          })
-          .catch((err) => alert(`${err.message} check your fields, Title and thread is mandatory`));
+
+      try {
+        if (!isEdit) {
+          await axios.post("/api/post", formData); // Don't set headers
+        } else {
+          await axios.patch(`/api/post/${postInfo.id}`, formData); // Don't set headers
+          queryClient.setQueryData(["post/comment", `${postInfo.id}`], (oldData) => {
+            return { ...oldData, post_info: { ...oldData.post_info, ...postInfo } };
+          });
+        }
+        setShowModal(false);
+      } catch (err) {
+        console.error("Form data being sent:", Object.fromEntries(formData));
+        alert(`Error: ${err.response?.data?.message || err.message}`);
       }
-    }
+    },
   });
+
   return (
     <div className="flex flex-col w-5/6 p-5 space-y-5 rounded-md h-4/6 blur-none md:w-3/4 md:h-5/6 md:p-10 bg-theme-cultured">
       <div className="flex flex-col items-center justify-between p-4 space-y-3 bg-white rounded-xl md:flex-row md:space-y-0">
@@ -78,10 +89,12 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
           )}
         </div>
       </div>
+
       <form
         encType="multipart/form-data"
         onSubmit={handleSubmit}
-        className="flex flex-col flex-1 justify-around p-1.5 w-full h-1/2 bg-white rounded-md">
+        className="flex flex-col flex-1 justify-around p-1.5 w-full h-1/2 bg-white rounded-md"
+      >
         <label htmlFor="title">
           <span>Title</span>
           <input
@@ -94,12 +107,14 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
             required
           />
         </label>
-        <label htmlFor="content" className="">
+
+        <label htmlFor="content">
           <span>{preMd ? "Markdown Preview" : "Content"}</span>
           <button
             type="button"
             className="active:scale-90 ml-5 my-0.5 py-0.5 px-2 bg-blue-600 text-white font-semibold rounded-md"
-            onClick={() => setPreMd(!preMd)}>
+            onClick={() => setPreMd(!preMd)}
+          >
             {preMd ? "close preview" : "preview markdown"}
           </button>
           <div className="flex flex-col space-y-2">
@@ -120,12 +135,14 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
             )}
           </div>
         </label>
+
         <label htmlFor="media" className="flex flex-col items-center space-y-3 md:space-y-0 md:space-x-5 md:flex-row">
           <select
             className="px-10 py-2 bg-white border rounded-md md:px-12"
             name="mediaType"
             id="mediaType"
-            onChange={(e) => setMediaType(e.target.value)}>
+            onChange={(e) => setMediaType(e.target.value)}
+          >
             <option value="media">Media</option>
             <option value="url">URL</option>
           </select>
@@ -133,7 +150,7 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
             <label htmlFor="media">
               <input
                 onChange={(e) => {
-                  if (e.target.files[0].size > 10485760) {
+                  if (e.target.files[0]?.size > 10485760) {
                     alert("File too large, only upload files less than 10MB");
                   } else {
                     setMedia(e.target.files[0]);
@@ -157,15 +174,18 @@ export default function NewPost({ setShowModal, isEdit = false, postInfo = {}, t
             />
           )}
         </label>
+
         {isEdit && (
           <span className="text-sm font-semibold text-red-500">
-            Only Add Image if you want to modify the original image if empty the original will be used.
+            Only Add Image if you want to modify the original image. If left empty, the original will be used.
           </span>
         )}
+
         <button
           type="submit"
           disabled={status === "loading"}
-          className="py-2 font-semibold text-white rounded-md bg-theme-orange active:scale-95">
+          className="py-2 font-semibold text-white rounded-md bg-theme-orange active:scale-95"
+        >
           {status === "loading" ? "Submitting..." : "Submit"}
         </button>
       </form>
