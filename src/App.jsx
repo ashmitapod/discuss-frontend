@@ -125,12 +125,6 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
-  useEffect(() => {
-    console.log('🔧 Environment check:');
-    console.log('- VITE_API_URL:', import.meta.env.VITE_API_URL);
-    console.log('- PROD mode:', import.meta.env.PROD);
-    console.log('- Axios baseURL:', axios.defaults.baseURL);
-  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
