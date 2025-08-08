@@ -16,31 +16,54 @@ import Register from "./pages/register/Register.jsx";
 const configureAxios = () => {
   // Set API URL based on environment
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  console.log('🔧 API URL configured:', apiUrl); 
+  console.log('🔧 API URL configured:', apiUrl);
+  
   axios.defaults.baseURL = apiUrl;
   axios.defaults.withCredentials = true;
   
-  // Optional: Add request interceptor for auth tokens
+  // ✅ Improved request interceptor for auth tokens
   axios.interceptors.request.use(
     (config) => {
       const token = localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      console.log('📤 Request:', config.method?.toUpperCase(), config.url);
       return config;
     },
-    (error) => Promise.reject(error)
-  );
-
-  // Optional: Add response interceptor for error handling
-  axios.interceptors.response.use(
-    (response) => response,
     (error) => {
-      if (error.response?.status === 401) {
+      console.error('❌ Request error:', error);
+      return Promise.reject(error);
+    }
+  );
+  
+  // ✅ Improved response interceptor with better error handling
+  axios.interceptors.response.use(
+    (response) => {
+      console.log('📥 Response:', response.status, response.config.url);
+      return response;
+    },
+    (error) => {
+      const status = error.response?.status;
+      const url = error.config?.url;
+      
+      console.error(`❌ API Error [${status}]:`, url, error.response?.data);
+      
+      if (status === 401) {
+        console.log('🔐 Unauthorized - removing token');
         localStorage.removeItem('token');
-        // You might want to redirect to login here
-        // window.location.href = '/login';
+        // Don't automatically redirect here - let components handle it
+        // This prevents React Router Error #300
       }
+      
+      if (status === 400) {
+        console.error('🔥 Bad Request - check endpoint:', url);
+      }
+      
+      if (status === 404) {
+        console.error('🔍 Not Found - endpoint might not exist:', url);
+      }
+      
       return Promise.reject(error);
     }
   );
@@ -56,6 +79,7 @@ const Inbox = lazy(() => import("./pages/inbox/Inbox.jsx"));
 const SavedPosts = lazy(() => import("./pages/saved/SavedPosts.jsx"));
 const SubThread = lazy(() => import("./pages/thread/SubThread.jsx"));
 
+// ✅ Router with better error handling
 const router = createBrowserRouter([
   {
     path: "/",
@@ -65,6 +89,7 @@ const router = createBrowserRouter([
       {
         path: "/",
         element: <FeedLayout />,
+        errorElement: <Error />, // Add error boundary for feed layout
         children: [
           {
             path: "/",
@@ -73,20 +98,24 @@ const router = createBrowserRouter([
           {
             path: "/:feedName",
             element: <Feed />,
+            errorElement: <Error />,
           },
           {
             path: "/post/:postId",
             element: <FullPost />,
+            errorElement: <Error />,
           },
         ],
       },
       {
         path: "/u/:username",
         element: <Profile />,
+        errorElement: <Error />,
       },
       {
         path: "/t/:threadName",
         element: <SubThread />,
+        errorElement: <Error />,
       },
       {
         path: "/saved",
@@ -95,6 +124,7 @@ const router = createBrowserRouter([
             <SavedPosts />
           </RequireAuth>
         ),
+        errorElement: <Error />,
       },
       {
         path: "/inbox",
@@ -103,23 +133,39 @@ const router = createBrowserRouter([
             <Inbox />
           </RequireAuth>
         ),
+        errorElement: <Error />,
       },
     ],
   },
   {
     path: "/login",
     element: <Login />,
+    errorElement: <Error />,
   },
   {
     path: "/register",
     element: <Register />,
+    errorElement: <Error />,
   },
 ]);
 
+// ✅ Improved QueryClient with better error handling
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 120000,
+      retry: (failureCount, error) => {
+        // Don't retry on 401 (unauthorized) or 404 (not found)
+        if (error?.response?.status === 401 || error?.response?.status === 404) {
+          return false;
+        }
+        // Retry up to 2 times for other errors
+        return failureCount < 2;
+      },
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
+    },
+    mutations: {
+      retry: false, // Don't retry mutations
     },
   },
 });
